@@ -1,8 +1,10 @@
 [package]
 name = "comfyui-launcher-linux"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "ComfyUI Aki Launcher for Linux (Tauri v2 + React 19)"
+authors = ["LeeChiLeung <1261620535@qq.com>"]
+license = "Apache-2.0"
+repository = "https://github.com/LeeChiLeung/comfyui-aki-launcher-linux"
 edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

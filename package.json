@@ -1,7 +1,17 @@
 {
   "name": "comfyui-launcher-linux",
-  "private": true,
   "version": "0.1.0",
+  "description": "ComfyUI Aki Launcher for Linux (Tauri v2 + React 19)",
+  "author": "LeeChiLeung <1261620535@qq.com>",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LeeChiLeung/comfyui-aki-launcher-linux.git"
+  },
+  "bugs": {
+    "url": "https://github.com/LeeChiLeung/comfyui-aki-launcher-linux/issues"
+  },
+  "homepage": "https://github.com/LeeChiLeung/comfyui-aki-launcher-linux#readme",
   "type": "module",
   "scripts": {
     "dev": "vite",

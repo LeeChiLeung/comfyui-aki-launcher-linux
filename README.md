@@ -1,5 +1,10 @@
 # ComfyUI 绘世启动器 (Linux 原生版本)
 
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Tauri v2](https://img.shields.io/badge/Tauri-v2-24C8DB?logo=tauri&logoColor=white)](https://v2.tauri.app/)
+[![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![TailwindCSS v4](https://img.shields.io/badge/TailwindCSS-v4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+
 > **ComfyUI Aki Launcher for Linux** —— 基于 **Tauri v2 (Rust) + React 19 + TypeScript + TailwindCSS v4** 深度重构的秋叶绘世启动器 Linux 原生桌面端。
 
 ---
@@ -65,3 +70,26 @@ pnpm tauri build
 - 原版启动器设计灵感与素材来源于 [秋叶aaaki](https://space.bilibili.com/12566101) 的「绘世启动器」。
 - ComfyUI 官方项目：[comfyanonymous/ComfyUI](https://github.com/comfyanonymous/ComfyUI)。
 - 本项目旨在为 Linux 开发者提供第一方原生级别的 ComfyUI 启动与管理体验。
+
+---
+
+## 📄 开源许可证 (License)
+
+本项目采用 **Apache License 2.0** 开源许可证。详细内容请参阅 [LICENSE](LICENSE) 文件。
+
+```text
+Copyright 2026 LeeChiLeung <1261620535@qq.com>
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+```
+
