@@ -36,6 +36,8 @@ pub fn run() {
             commands::open_system_terminal,
             commands::get_git_info,
             commands::run_diagnostics,
+            commands::get_available_extensions,
+            commands::install_custom_node,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

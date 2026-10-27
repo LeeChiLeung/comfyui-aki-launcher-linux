@@ -115,6 +115,18 @@ pub struct CustomNodeInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AvailableExtension {
+    pub author: Option<String>,
+    pub title: String,
+    pub id: Option<String>,
+    pub reference: Option<String>,
+    pub files: Vec<String>,
+    pub install_type: Option<String>,
+    pub description: Option<String>,
+    pub installed: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelFileInfo {
     pub category: String,
     pub file_name: String,

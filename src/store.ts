@@ -12,6 +12,7 @@ import {
   DiagnosticItem,
   NavigationTab,
   AppTheme,
+  AvailableExtension,
 } from "./types";
 
 interface LauncherState {
@@ -22,6 +23,8 @@ interface LauncherState {
   diagnostics: DiagnosticItem[];
   logs: LogMessage[];
   customNodes: CustomNodeInfo[];
+  availableExtensions: AvailableExtension[];
+  isLoadingExtensions: boolean;
   models: ModelFileInfo[];
   activeTab: NavigationTab;
   isActionLoading: boolean;
@@ -35,6 +38,8 @@ interface LauncherState {
   saveConfig: (cfg: Partial<LauncherConfig>) => Promise<void>;
   clearLogs: () => void;
   refreshCustomNodes: () => Promise<void>;
+  refreshAvailableExtensions: (forceRefresh?: boolean) => Promise<void>;
+  installExtension: (url: string, title?: string) => Promise<string>;
   refreshModels: () => Promise<void>;
   refreshGitInfo: () => Promise<void>;
   runDiagnostics: () => Promise<void>;
@@ -57,6 +62,8 @@ export const useLauncherStore = create<LauncherState>((set, get) => ({
   diagnostics: [],
   logs: [],
   customNodes: [],
+  availableExtensions: [],
+  isLoadingExtensions: false,
   models: [],
   activeTab: "home",
   isActionLoading: false,
@@ -158,6 +165,32 @@ export const useLauncherStore = create<LauncherState>((set, get) => ({
       set({ customNodes: nodes });
     } catch (err) {
       console.error("Failed to load custom nodes:", err);
+    }
+  },
+
+  refreshAvailableExtensions: async (forceRefresh = false) => {
+    set({ isLoadingExtensions: true });
+    try {
+      const extList = await invoke<AvailableExtension[]>("get_available_extensions", {
+        forceRefresh,
+      });
+      set({ availableExtensions: extList, isLoadingExtensions: false });
+    } catch (err) {
+      console.error("Failed to load available extensions:", err);
+      set({ isLoadingExtensions: false });
+    }
+  },
+
+  installExtension: async (url: string, title?: string) => {
+    try {
+      const res = await invoke<string>("install_custom_node", { url, title });
+      // Refresh both lists after install
+      get().refreshCustomNodes();
+      get().refreshAvailableExtensions(false);
+      return res;
+    } catch (err) {
+      console.error("Failed to install extension:", err);
+      throw err;
     }
   },
 

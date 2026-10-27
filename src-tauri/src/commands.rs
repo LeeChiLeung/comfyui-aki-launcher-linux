@@ -704,3 +704,261 @@ pub async fn run_diagnostics() -> Result<Vec<DiagnosticItem>, String> {
 
     Ok(items)
 }
+
+#[derive(serde::Deserialize)]
+struct RawNodeList {
+    custom_nodes: Option<Vec<RawCustomNode>>,
+}
+
+#[derive(serde::Deserialize)]
+struct RawCustomNode {
+    author: Option<String>,
+    title: Option<String>,
+    id: Option<String>,
+    reference: Option<String>,
+    files: Option<Vec<String>>,
+    install_type: Option<String>,
+    description: Option<String>,
+}
+
+#[tauri::command]
+pub async fn get_available_extensions(
+    force_refresh: bool,
+) -> Result<Vec<AvailableExtension>, String> {
+    let cache_dir = dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from("/home/sam/.config"))
+        .join("aki-comfyui-launcher");
+    let cache_file = cache_dir.join("cache_custom_nodes.json");
+    let local_fallback = get_comfyui_root_dir()
+        .join("ComfyUI")
+        .join("custom_nodes")
+        .join("ComfyUI-Manager")
+        .join("custom-node-list.json");
+
+    let mut json_data = String::new();
+
+    // 1. If not forcing refresh and cache exists, check cache
+    if !force_refresh && cache_file.exists() {
+        if let Ok(content) = fs::read_to_string(&cache_file) {
+            if !content.trim().is_empty() {
+                json_data = content;
+            }
+        }
+    }
+
+    // 2. If no data or forcing refresh, try curl from Aki's official mirror
+    if json_data.is_empty() {
+        let mirror_url = "https://extension-list.oystermercury.top/comfyui/custom-node-list.json";
+        if let Ok(output) = std::process::Command::new("curl")
+            .args(["-s", "--connect-timeout", "5", "-m", "15", mirror_url])
+            .output()
+        {
+            if output.status.success() {
+                let fetched = String::from_utf8_lossy(&output.stdout).to_string();
+                if fetched.contains("\"custom_nodes\"") {
+                    let _ = fs::create_dir_all(&cache_dir);
+                    let _ = fs::write(&cache_file, &fetched);
+                    json_data = fetched;
+                }
+            }
+        }
+    }
+
+    // 3. Fallback to local ComfyUI-Manager file if still empty
+    if json_data.is_empty() && local_fallback.exists() {
+        if let Ok(content) = fs::read_to_string(&local_fallback) {
+            json_data = content;
+        }
+    }
+
+    if json_data.is_empty() {
+        return Err("无法获取插件扩展列表，请检查网络或确认本地插件数据库存在".to_string());
+    }
+
+    let parsed: RawNodeList = serde_json::from_str(&json_data)
+        .map_err(|e| format!("解析插件数据失败: {}", e))?;
+
+    let raw_list = parsed.custom_nodes.unwrap_or_default();
+
+    // Scan installed custom nodes to match
+    let custom_nodes_dir = get_comfyui_root_dir().join("ComfyUI").join("custom_nodes");
+    let mut installed_folders = std::collections::HashSet::new();
+    let mut installed_remotes = std::collections::HashSet::new();
+
+    if let Ok(entries) = fs::read_dir(&custom_nodes_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                let fname = entry.file_name().to_string_lossy().to_string();
+                if !fname.starts_with('.') && !fname.starts_with("__") {
+                    let key = fname.to_lowercase().replace(['-', ' ', '_'], "");
+                    installed_folders.insert(key);
+
+                    // Check git remote
+                    let git_dir = path.join(".git");
+                    if git_dir.exists() {
+                        if let Ok(out) = std::process::Command::new("git")
+                            .args(["-C", &path.to_string_lossy(), "remote", "get-url", "origin"])
+                            .output()
+                        {
+                            if out.status.success() {
+                                let remote =
+                                    String::from_utf8_lossy(&out.stdout).trim().to_lowercase();
+                                let clean = remote
+                                    .trim_end_matches(".git")
+                                    .trim_end_matches('/')
+                                    .to_string();
+                                if let Some(pos) = clean.find("github.com/") {
+                                    installed_remotes.insert(clean[pos + 11..].to_string());
+                                } else {
+                                    installed_remotes.insert(clean);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let mut result = Vec::new();
+    for node in raw_list {
+        let title = node.title.unwrap_or_default();
+        if title.is_empty() {
+            continue;
+        }
+
+        let reference = node.reference;
+        let files = node.files.unwrap_or_default();
+
+        let mut is_installed = false;
+        let title_key = title.to_lowercase().replace(['-', ' ', '_'], "");
+        if installed_folders.contains(&title_key) {
+            is_installed = true;
+        }
+
+        if !is_installed {
+            if let Some(ref ref_url) = reference {
+                let norm = ref_url
+                    .to_lowercase()
+                    .trim_end_matches(".git")
+                    .trim_end_matches('/')
+                    .to_string();
+                let clean = if let Some(pos) = norm.find("github.com/") {
+                    norm[pos + 11..].to_string()
+                } else {
+                    norm
+                };
+                if installed_remotes.contains(&clean) {
+                    is_installed = true;
+                }
+            }
+        }
+
+        if !is_installed {
+            for f in &files {
+                let norm = f
+                    .to_lowercase()
+                    .trim_end_matches(".git")
+                    .trim_end_matches('/')
+                    .to_string();
+                let clean = if let Some(pos) = norm.find("github.com/") {
+                    norm[pos + 11..].to_string()
+                } else {
+                    norm
+                };
+                if installed_remotes.contains(&clean) {
+                    is_installed = true;
+                    break;
+                }
+            }
+        }
+
+        result.push(AvailableExtension {
+            author: node.author,
+            title,
+            id: node.id,
+            reference,
+            files,
+            install_type: node.install_type,
+            description: node.description,
+            installed: is_installed,
+        });
+    }
+
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn install_custom_node(
+    url: String,
+    title: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let clean_url = url.trim();
+    if clean_url.is_empty() {
+        return Err("仓库地址不能为空".to_string());
+    }
+
+    // Determine target folder name
+    let repo_name = if let Some(pos) = clean_url.rfind('/') {
+        let mut name = &clean_url[pos + 1..];
+        if let Some(stripped) = name.strip_suffix(".git") {
+            name = stripped;
+        }
+        name.to_string()
+    } else {
+        title.clone().unwrap_or_else(|| "custom_node".to_string())
+    };
+
+    let target_dir = get_comfyui_root_dir()
+        .join("ComfyUI")
+        .join("custom_nodes")
+        .join(&repo_name);
+
+    if target_dir.exists() {
+        return Ok(format!("插件 {} 已存在于目录中", repo_name));
+    }
+
+    // Run git clone
+    let cfg = state.config.lock().await.clone();
+    let clone_url = if cfg.github_fast && clean_url.starts_with("https://github.com/") {
+        format!("https://mirror.ghproxy.com/{}", clean_url)
+    } else {
+        clean_url.to_string()
+    };
+
+    let output = std::process::Command::new("git")
+        .args([
+            "clone",
+            "--depth",
+            "1",
+            &clone_url,
+            &target_dir.to_string_lossy(),
+        ])
+        .output()
+        .map_err(|e| format!("执行 Git Clone 失败: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("克隆插件仓库失败: {}", stderr));
+    }
+
+    // Check requirements.txt
+    let req_file = target_dir.join("requirements.txt");
+    if req_file.exists() {
+        let _ = std::process::Command::new(&cfg.python_path)
+            .args([
+                "-m",
+                "pip",
+                "install",
+                "--user",
+                "--no-deps",
+                "-r",
+                &req_file.to_string_lossy(),
+            ])
+            .output();
+    }
+
+    Ok(format!("成功安装插件：{}", title.unwrap_or(repo_name)))
+}

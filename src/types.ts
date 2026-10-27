@@ -72,6 +72,17 @@ export interface CustomNodeInfo {
   commit: string | null;
 }
 
+export interface AvailableExtension {
+  author?: string;
+  title: string;
+  id?: string;
+  reference?: string;
+  files: string[];
+  install_type?: string;
+  description?: string;
+  installed: boolean;
+}
+
 export interface ModelFileInfo {
   category: string;
   file_name: string;
