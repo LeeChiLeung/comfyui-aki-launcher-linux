@@ -31,6 +31,9 @@ export interface LauncherConfig {
   cuda_malloc: boolean;
   enable_aki_patches: boolean;
   auto_open_browser: boolean;
+  hf_offline: boolean;
+  multi_user: boolean;
+  patches: string[];
   mirror_pypi: boolean;
   mirror_git: boolean;
   mirror_hf: boolean;

@@ -219,8 +219,20 @@ pub async fn start_comfyui(
     if cfg.cuda_malloc && !cfg.stable_mode {
         cmd.arg("--cuda-malloc");
     }
+    if cfg.stable_mode {
+        cmd.arg("--deterministic");
+    }
+    if !cfg.smart_vram {
+        cmd.arg("--disable-smart-memory");
+    }
     if cfg.fast_mode {
         cmd.arg("--fast");
+    }
+    if cfg.multi_user {
+        cmd.arg("--multi-user");
+    }
+    if cfg.hf_offline {
+        cmd.env("HF_HUB_OFFLINE", "1");
     }
 
     if !cfg.extra_args.trim().is_empty() {
