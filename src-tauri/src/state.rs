@@ -112,6 +112,9 @@ pub struct CustomNodeInfo {
     pub has_git: bool,
     pub branch: Option<String>,
     pub commit: Option<String>,
+    pub commit_date: Option<String>,
+    pub remote_url: Option<String>,
+    pub enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

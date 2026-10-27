@@ -38,6 +38,11 @@ interface LauncherState {
   saveConfig: (cfg: Partial<LauncherConfig>) => Promise<void>;
   clearLogs: () => void;
   refreshCustomNodes: () => Promise<void>;
+  toggleCustomNode: (path: string, enable: boolean) => Promise<void>;
+  uninstallCustomNode: (path: string) => Promise<void>;
+  updateCustomNode: (path: string) => Promise<string>;
+  updateAllCustomNodes: () => Promise<string[]>;
+  switchNodeVersion: (path: string, target: string) => Promise<string>;
   refreshAvailableExtensions: (forceRefresh?: boolean) => Promise<void>;
   installExtension: (url: string, title?: string) => Promise<string>;
   refreshModels: () => Promise<void>;
@@ -165,6 +170,60 @@ export const useLauncherStore = create<LauncherState>((set, get) => ({
       set({ customNodes: nodes });
     } catch (err) {
       console.error("Failed to load custom nodes:", err);
+    }
+  },
+
+  toggleCustomNode: async (path: string, enable: boolean) => {
+    try {
+      await invoke("toggle_custom_node", { path, enable });
+      await get().refreshCustomNodes();
+    } catch (err) {
+      console.error("Failed to toggle custom node:", err);
+      throw err;
+    }
+  },
+
+  uninstallCustomNode: async (path: string) => {
+    try {
+      await invoke("uninstall_custom_node", { path });
+      await get().refreshCustomNodes();
+      get().refreshAvailableExtensions(false);
+    } catch (err) {
+      console.error("Failed to uninstall custom node:", err);
+      throw err;
+    }
+  },
+
+  updateCustomNode: async (path: string) => {
+    try {
+      const res = await invoke<string>("update_custom_node", { path });
+      await get().refreshCustomNodes();
+      return res;
+    } catch (err) {
+      console.error("Failed to update custom node:", err);
+      throw err;
+    }
+  },
+
+  updateAllCustomNodes: async () => {
+    try {
+      const res = await invoke<string[]>("update_all_custom_nodes");
+      await get().refreshCustomNodes();
+      return res;
+    } catch (err) {
+      console.error("Failed to update all custom nodes:", err);
+      throw err;
+    }
+  },
+
+  switchNodeVersion: async (path: string, target: string) => {
+    try {
+      const res = await invoke<string>("switch_node_version", { path, target });
+      await get().refreshCustomNodes();
+      return res;
+    } catch (err) {
+      console.error("Failed to switch node version:", err);
+      throw err;
     }
   },
 

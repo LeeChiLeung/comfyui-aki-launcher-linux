@@ -70,6 +70,9 @@ export interface CustomNodeInfo {
   has_git: boolean;
   branch: string | null;
   commit: string | null;
+  commit_date: string | null;
+  remote_url: string | null;
+  enabled: boolean;
 }
 
 export interface AvailableExtension {

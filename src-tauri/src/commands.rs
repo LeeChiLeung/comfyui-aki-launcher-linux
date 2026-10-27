@@ -413,48 +413,197 @@ pub async fn get_custom_nodes() -> Result<Vec<CustomNodeInfo>, String> {
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_dir() {
-                let name = entry.file_name().to_string_lossy().to_string();
-                if name.starts_with('.') {
+                let raw_name = entry.file_name().to_string_lossy().to_string();
+                if raw_name.starts_with('.') || raw_name.starts_with("__") {
                     continue;
                 }
+
+                let enabled = !raw_name.ends_with(".disabled");
+                let display_name = if let Some(stripped) = raw_name.strip_suffix(".disabled") {
+                    stripped.to_string()
+                } else {
+                    raw_name.clone()
+                };
+
                 let git_dir = path.join(".git");
                 let has_git = git_dir.exists();
                 let mut branch = None;
                 let mut commit = None;
+                let mut commit_date = None;
+                let mut remote_url = None;
 
                 if has_git {
+                    let path_str = path.to_string_lossy();
+
                     if let Ok(out) = std::process::Command::new("git")
-                        .args(["-C", &path.to_string_lossy(), "branch", "--show-current"])
+                        .args(["-C", &path_str, "branch", "--show-current"])
                         .output()
                     {
                         if out.status.success() {
-                            branch = Some(String::from_utf8_lossy(&out.stdout).trim().to_string());
+                            let b = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                            if !b.is_empty() {
+                                branch = Some(b);
+                            }
                         }
                     }
 
                     if let Ok(out) = std::process::Command::new("git")
-                        .args(["-C", &path.to_string_lossy(), "rev-parse", "--short", "HEAD"])
+                        .args(["-C", &path_str, "rev-parse", "--short", "HEAD"])
                         .output()
                     {
                         if out.status.success() {
-                            commit = Some(String::from_utf8_lossy(&out.stdout).trim().to_string());
+                            let c = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                            if !c.is_empty() {
+                                commit = Some(c);
+                            }
+                        }
+                    }
+
+                    if let Ok(out) = std::process::Command::new("git")
+                        .args(["-C", &path_str, "log", "-1", "--format=%cd", "--date=format:%Y-%m-%d %H:%M:%S"])
+                        .output()
+                    {
+                        if out.status.success() {
+                            let d = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                            if !d.is_empty() {
+                                commit_date = Some(d);
+                            }
+                        }
+                    }
+
+                    if let Ok(out) = std::process::Command::new("git")
+                        .args(["-C", &path_str, "remote", "get-url", "origin"])
+                        .output()
+                    {
+                        if out.status.success() {
+                            let r = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                            if !r.is_empty() {
+                                remote_url = Some(r);
+                            }
                         }
                     }
                 }
 
                 nodes.push(CustomNodeInfo {
-                    name,
+                    name: display_name,
                     path: path.to_string_lossy().to_string(),
                     has_git,
                     branch,
                     commit,
+                    commit_date,
+                    remote_url,
+                    enabled,
                 });
             }
         }
     }
 
-    nodes.sort_by(|a, b| a.name.cmp(&b.name));
+    nodes.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
     Ok(nodes)
+}
+
+#[tauri::command]
+pub async fn toggle_custom_node(path: String, enable: bool) -> Result<(), String> {
+    let p = PathBuf::from(&path);
+    if !p.exists() {
+        return Err("插件目录不存在".to_string());
+    }
+
+    let fname = p.file_name().unwrap_or_default().to_string_lossy().to_string();
+    let parent = p.parent().unwrap_or(&p);
+
+    if enable {
+        if let Some(clean) = fname.strip_suffix(".disabled") {
+            let target = parent.join(clean);
+            fs::rename(&p, &target).map_err(|e| e.to_string())?;
+        }
+    } else {
+        if !fname.ends_with(".disabled") {
+            let target = parent.join(format!("{}.disabled", fname));
+            fs::rename(&p, &target).map_err(|e| e.to_string())?;
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn uninstall_custom_node(path: String) -> Result<(), String> {
+    let p = PathBuf::from(&path);
+    if !p.exists() {
+        return Err("插件目录不存在".to_string());
+    }
+    fs::remove_dir_all(&p).map_err(|e| format!("删除插件失败: {}", e))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn update_custom_node(path: String) -> Result<String, String> {
+    let p = PathBuf::from(&path);
+    if !p.exists() || !p.join(".git").exists() {
+        return Err("该插件不具备 Git 仓库信息".to_string());
+    }
+
+    let output = std::process::Command::new("git")
+        .args(["-C", &p.to_string_lossy(), "pull"])
+        .output()
+        .map_err(|e| format!("执行更新失败: {}", e))?;
+
+    if output.status.success() {
+        let msg = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        Ok(msg)
+    } else {
+        let err = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        Err(format!("更新出错: {}", err))
+    }
+}
+
+#[tauri::command]
+pub async fn update_all_custom_nodes() -> Result<Vec<String>, String> {
+    let root = get_comfyui_root_dir().join("ComfyUI").join("custom_nodes");
+    let mut updated = Vec::new();
+
+    if let Ok(entries) = fs::read_dir(&root) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() && path.join(".git").exists() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if let Ok(out) = std::process::Command::new("git")
+                    .args(["-C", &path.to_string_lossy(), "pull"])
+                    .output()
+                {
+                    if out.status.success() {
+                        let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                        if !stdout.contains("Already up to date") && !stdout.contains("已经是最新") {
+                            updated.push(format!("{}: {}", name, stdout));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(updated)
+}
+
+#[tauri::command]
+pub async fn switch_node_version(path: String, target: String) -> Result<String, String> {
+    let p = PathBuf::from(&path);
+    if !p.exists() || !p.join(".git").exists() {
+        return Err("该插件不具备 Git 仓库信息".to_string());
+    }
+
+    let output = std::process::Command::new("git")
+        .args(["-C", &p.to_string_lossy(), "checkout", &target])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if output.status.success() {
+        Ok(format!("成功切换至 {}", target))
+    } else {
+        let err = String::from_utf8_lossy(&output.stderr);
+        Err(format!("切换失败: {}", err))
+    }
 }
 
 #[tauri::command]
